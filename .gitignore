@@ -1,0 +1,12 @@
+node_modules/
+src/backend/public/
+.artifacts/
+.playwright-cli/
+.playwright/
+.env
+.env.*
+!.env.example
+*.zip
+infra/main.json
+auth.json
+storage-state*.json

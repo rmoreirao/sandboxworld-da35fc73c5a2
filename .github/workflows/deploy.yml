@@ -1,0 +1,230 @@
+name: Deploy workshop
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: workshop-production
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Authorize current release
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event.repository.default_branch == 'main' &&
+      vars.AZURE_CLIENT_ID != '' &&
+      vars.AZURE_TENANT_ID != '' &&
+      vars.AZURE_SUBSCRIPTION_ID != '' &&
+      vars.AZURE_RESOURCE_GROUP != '' &&
+      vars.AZURE_LOCATION != '' &&
+      vars.AZURE_WEBAPP_NAME != '' &&
+      vars.REVIEWER_APP_SLUG != '' &&
+      vars.BOOTSTRAP_SEED_SHA != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+    outputs:
+      sha: ${{ steps.release.outputs.sha }}
+      pull_request: ${{ steps.release.outputs.pull_request }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify seed or current Tech Lead approval and PR checks
+        id: release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BOOTSTRAP_SEED_SHA: ${{ vars.BOOTSTRAP_SEED_SHA }}
+          REVIEWER_APP_SLUG: ${{ vars.REVIEWER_APP_SLUG }}
+        with:
+          script: |
+            await require('./.github/scripts/release-gate.cjs')({ github, context, core });
+
+  validate:
+    name: Package authorized revision without cloud credentials
+    needs: gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.gate.outputs.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Install and build
+        run: npm ci && npm run build
+      - name: Compile Bicep and package only runtime files
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts
+          npm prune --omit=dev --ignore-scripts
+          az bicep install --version v0.47.16
+          az bicep build --file infra/main.bicep --outfile .artifacts/main.json
+          package_paths=(package.json package-lock.json src/backend)
+          if [[ -d node_modules ]]; then
+            package_paths+=(node_modules)
+          fi
+          zip -q -r .artifacts/app.zip "${package_paths[@]}"
+          printf '%s\n' "$GITHUB_SHA" > .artifacts/revision.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ github.sha }}
+          path: .artifacts/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  cloud:
+    name: Deploy authorized main revision
+    needs: [gate, validate]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      checks: read
+      id-token: write
+    env:
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      DEPLOYMENT_SHA: ${{ needs.gate.outputs.sha }}
+    outputs:
+      appUrl: ${{ steps.deploy.outputs.appUrl }}
+      sha: ${{ needs.gate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.gate.outputs.sha }}
+          sparse-checkout: .github/scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-${{ github.sha }}
+          path: .artifacts
+      - name: Recheck current review, checks, and main before Azure login
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BOOTSTRAP_SEED_SHA: ${{ vars.BOOTSTRAP_SEED_SHA }}
+          REVIEWER_APP_SLUG: ${{ vars.REVIEWER_APP_SLUG }}
+        with:
+          script: |
+            await require('./.github/scripts/release-gate.cjs')({ github, context, core });
+      - name: Enforce the small workshop resource surface
+        run: |
+          set -euo pipefail
+          test "$(cat .artifacts/revision.txt)" = "$DEPLOYMENT_SHA"
+          jq -e '
+            (.resources | type == "array") and
+            (.resources | length == 2) and
+            ([.resources[].type] | sort == ["Microsoft.Web/serverfarms", "Microsoft.Web/sites"]) and
+            (all(.resources[]; (.resources // [] | length == 0) and (.scope == null))) and
+            (all(.resources[] | select(.type == "Microsoft.Web/serverfarms");
+              .sku.name == "B1" and .kind == "linux" and .properties.reserved == true)) and
+            (all(.resources[] | select(.type == "Microsoft.Web/sites");
+              .kind == "app,linux" and .properties.httpsOnly == true and
+              .properties.siteConfig.linuxFxVersion == "NODE|24-lts"))
+          ' .artifacts/main.json > /dev/null
+      - name: Sign in to Azure using GitHub OIDC
+        id: azure_login
+        continue-on-error: true
+        uses: Azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Wait for new Azure role assignment propagation
+        if: ${{ steps.azure_login.outcome == 'failure' }}
+        run: |
+          echo "Azure login failed; waiting 60 seconds before retrying the same identity and scope."
+          sleep 60
+      - name: Retry Azure OIDC login
+        id: azure_login_retry
+        if: ${{ steps.azure_login.outcome == 'failure' }}
+        continue-on-error: true
+        uses: Azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Wait before final Azure login attempt
+        if: ${{ steps.azure_login_retry.outcome == 'failure' }}
+        run: |
+          echo "Azure login still failed; waiting 60 seconds before the final attempt."
+          sleep 60
+      - name: Final Azure OIDC login attempt
+        if: ${{ steps.azure_login_retry.outcome == 'failure' }}
+        uses: Azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy resource-group infrastructure and app package
+        id: deploy
+        run: |
+          set -euo pipefail
+          az webapp list-runtimes --os linux --output json |
+            node .github/scripts/check-node-runtime.cjs
+          az deployment group create \
+            --name "workshop-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file .artifacts/main.json \
+            --parameters appName="$AZURE_WEBAPP_NAME" location="$AZURE_LOCATION" deploymentSha="$DEPLOYMENT_SHA" \
+            --output json > .artifacts/azure-deployment.json
+          APP_URL=$(jq -er '.properties.outputs.appUrl.value' .artifacts/azure-deployment.json)
+          test "$APP_URL" = "https://${AZURE_WEBAPP_NAME}.azurewebsites.net"
+          echo "appUrl=$APP_URL" >> "$GITHUB_OUTPUT"
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --src-path .artifacts/app.zip \
+            --type zip --clean true --restart true \
+            --track-status true --output none
+          healthy=false
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent --show-error --connect-timeout 10 --max-time 20 \
+              "$APP_URL/health" > .artifacts/health.json &&
+              jq -e --arg sha "$DEPLOYMENT_SHA" \
+                '.status == "ok" and .revision == $sha' .artifacts/health.json > /dev/null; then
+              healthy=true
+              break
+            fi
+            sleep 10
+          done
+          test "$healthy" = true
+          jq -n --arg appUrl "$APP_URL" --arg sha "$DEPLOYMENT_SHA" \
+            --arg runUrl "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            '{appUrl: $appUrl, sha: $sha, runUrl: $runUrl, healthVerified: true}' \
+            > .artifacts/deployment.json
+          {
+            echo "## Workshop deployed"
+            echo "- App: $APP_URL"
+            echo "- Revision: \`$DEPLOYMENT_SHA\`"
+            echo "- Health: verified \`/health\` returns this exact revision"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish deployment metadata
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-${{ github.sha }}
+          path: |
+            .artifacts/deployment.json
+            .artifacts/health.json
+          if-no-files-found: error
+          retention-days: 7

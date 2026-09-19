@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "managedBy": "SandboxWorld",
+  "sessionId": "da35fc73-c5a2-4652-b9aa-49c0d07fc28c",
+  "workshopVersionId": "d3ac25827697f18b2ba7f47295edeea80ca13ab39a08c693742167b57515afad",
+  "ownerId": 22824536,
+  "repositoryId": 1376957431,
+  "baseline": {
+    "kind": "pinned-starter",
+    "packageContentHash": "d3ac25827697f18b2ba7f47295edeea80ca13ab39a08c693742167b57515afad"
+  }
+}

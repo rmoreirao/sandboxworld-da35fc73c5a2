@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pomodoro workshop starter</title>
+    <link rel="icon" href="data:,">
+    <script>
+      (() => {
+        const param = new URLSearchParams(window.location.search).get("clawpilotTheme");
+        const theme = param === "dark" || param === "light"
+          ? param
+          : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Pomodoro workshop starter</h1>
+      <p>The server and frontend are connected. The product is yours to build.</p>
+      <p id="health" role="status">Checking the backend…</p>
+      <h2>Your next step</h2>
+      <p>Read the repository README and the workshop brief, then agree the task and timer requirements with your Product Owner.</p>
+      <p>Task entry, task persistence, and the 25-minute timer are intentionally not implemented.</p>
+      <a href="/health">View backend health</a>
+    </main>
+  </body>
+</html>

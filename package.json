@@ -1,0 +1,14 @@
+{
+  "name": "pomodoro-workshop-starter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node src/backend/server.js",
+    "dev": "node scripts/dev.mjs"
+  }
+}
