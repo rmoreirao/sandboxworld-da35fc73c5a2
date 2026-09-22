@@ -1,5 +1,6 @@
 node_modules/
 src/backend/public/
+src/backend/data/
 .artifacts/
 .playwright-cli/
 .playwright/

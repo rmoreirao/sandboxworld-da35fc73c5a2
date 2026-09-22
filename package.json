@@ -10,5 +10,8 @@
     "build": "node scripts/build.mjs",
     "start": "node src/backend/server.js",
     "dev": "node scripts/dev.mjs"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
   }
 }
