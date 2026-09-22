@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pomodoro workshop starter</title>
+    <title>Pomodoro task list</title>
     <link rel="icon" href="data:,">
     <script>
       (() => {
@@ -19,13 +19,30 @@
   </head>
   <body>
     <main>
-      <h1>Pomodoro workshop starter</h1>
-      <p>The server and frontend are connected. The product is yours to build.</p>
-      <p id="health" role="status">Checking the backend…</p>
-      <h2>Your next step</h2>
-      <p>Read the repository README and the workshop brief, then agree the task and timer requirements with your Product Owner.</p>
-      <p>Task entry, task persistence, and the 25-minute timer are intentionally not implemented.</p>
-      <a href="/health">View backend health</a>
+      <h1>Pomodoro task list</h1>
+      <section aria-labelledby="timer-heading">
+        <h2 id="timer-heading">Focus timer</h2>
+        <p id="countdown" role="timer">25:00</p>
+        <p id="timer-message" role="status" aria-live="polite"></p>
+        <div class="timer-controls">
+          <button type="button" id="start-timer">Start timer</button>
+          <button type="button" id="pause-timer">Pause timer</button>
+          <button type="button" id="reset-timer">Reset timer</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="tasks-heading">
+        <h2 id="tasks-heading">Tasks</h2>
+        <form id="task-form">
+          <label for="task-title">Task title</label>
+          <div class="task-entry">
+            <input id="task-title" name="title" type="text" autocomplete="off">
+            <button type="submit">Add task</button>
+          </div>
+        </form>
+        <p id="task-message" role="status" aria-live="polite"></p>
+        <ul id="task-list"></ul>
+      </section>
     </main>
   </body>
 </html>

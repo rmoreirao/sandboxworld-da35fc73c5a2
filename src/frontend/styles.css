@@ -72,4 +72,85 @@ p { margin: 16px 0; }
 a { color: var(--cp-link); text-underline-offset: 4px; }
 a:hover { color: var(--cp-accent); }
 a:focus-visible { outline: 2px solid var(--cp-accent); outline-offset: 4px; }
-#health { color: var(--cp-text-soft); overflow-wrap: anywhere; }
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--cp-accent);
+  border-radius: 4px;
+  background: var(--cp-accent);
+  color: var(--cp-accent-fg);
+  cursor: pointer;
+  padding: 8px 12px;
+}
+
+button:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--cp-accent-hover);
+}
+
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cp-accent);
+  outline-offset: 2px;
+}
+
+#countdown {
+  font-size: clamp(2rem, 9vw, 4rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.timer-controls,
+.task-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.task-entry input {
+  border: 1px solid var(--cp-border-strong);
+  border-radius: 4px;
+  flex: 1 1 16rem;
+  min-width: 0;
+  padding: 8px;
+}
+
+#task-message {
+  color: var(--cp-danger);
+  min-height: 1.65em;
+}
+
+#task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#task-list li {
+  align-items: center;
+  border-bottom: 1px solid var(--cp-border);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+#task-list label {
+  display: flex;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+#task-list .completed label {
+  color: var(--cp-text-muted);
+  text-decoration: line-through;
+}
