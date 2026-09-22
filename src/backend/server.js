@@ -42,6 +42,7 @@ function saveTasks(nextTasks) {
 }
 
 function mutateTasks(mutation) {
+  // Mutations return updated tasks and a result, or null when no task matches.
   const queuedMutation = taskMutationQueue.then(async () => {
     const change = mutation(tasks);
     if (!change) return null;
@@ -98,6 +99,9 @@ app.post('/api/tasks', async (request, response, next) => {
     next(error);
   }
 });
+app.options('/api/tasks', (_request, response) => {
+  response.set('Allow', 'GET, HEAD, POST, OPTIONS').sendStatus(204);
+});
 app.all('/api/tasks', (_request, response) => {
   response.set('Allow', 'GET, POST').status(405).json({ error: 'Method not allowed.' });
 });
@@ -150,6 +154,9 @@ app.delete('/api/tasks/:id', async (request, response, next) => {
   } catch (error) {
     next(error);
   }
+});
+app.options('/api/tasks/:id', (_request, response) => {
+  response.set('Allow', 'PATCH, DELETE, OPTIONS').sendStatus(204);
 });
 app.all('/api/tasks/:id', (_request, response) => {
   response.set('Allow', 'PATCH, DELETE').status(405).json({ error: 'Method not allowed.' });
