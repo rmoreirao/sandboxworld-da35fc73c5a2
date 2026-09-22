@@ -30,15 +30,28 @@ async function loadTasks() {
 
 let tasks = await loadTasks();
 let writeQueue = Promise.resolve();
-function saveTasks() {
-  const serializedTasks = JSON.stringify(tasks);
-  writeQueue = writeQueue.then(async () => {
+let taskMutationQueue = Promise.resolve();
+function saveTasks(nextTasks) {
+  const serializedTasks = JSON.stringify(nextTasks);
+  writeQueue = writeQueue.catch(() => {}).then(async () => {
     await mkdir(dirname(tasksFile), { recursive: true });
     const temporaryFile = `${tasksFile}.${randomUUID()}.tmp`;
     await writeFile(temporaryFile, serializedTasks);
     await rename(temporaryFile, tasksFile);
   });
   return writeQueue;
+}
+
+function mutateTasks(mutation) {
+  const queuedMutation = taskMutationQueue.then(async () => {
+    const change = mutation(tasks);
+    if (!change) return null;
+    await saveTasks(change.tasks);
+    tasks = change.tasks;
+    return change.result;
+  });
+  taskMutationQueue = queuedMutation.catch(() => {});
+  return queuedMutation;
 }
 
 function validateTitle(title) {
@@ -48,7 +61,7 @@ function validateTitle(title) {
 }
 
 function isTaskId(id) {
-  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
 const app = express();
@@ -76,10 +89,12 @@ app.post('/api/tasks', async (request, response, next) => {
   }
 
   const task = { id: randomUUID(), title, completed: false };
-  tasks.push(task);
   try {
-    await saveTasks();
-    response.status(201).json(task);
+    const savedTask = await mutateTasks((currentTasks) => ({
+      tasks: [...currentTasks, task],
+      result: task,
+    }));
+    response.status(201).json(savedTask);
   } catch (error) {
     next(error);
   }
@@ -91,15 +106,19 @@ app.patch('/api/tasks/:id', async (request, response, next) => {
     return;
   }
 
-  const task = tasks.find(({ id }) => id === request.params.id);
-  if (!task) {
-    response.status(404).json({ error: 'Task not found.' });
-    return;
-  }
-
-  task.completed = request.body.completed;
   try {
-    await saveTasks();
+    const task = await mutateTasks((currentTasks) => {
+      const taskIndex = currentTasks.findIndex(({ id }) => id === request.params.id);
+      if (taskIndex === -1) return null;
+      const updatedTask = { ...currentTasks[taskIndex], completed: request.body.completed };
+      const updatedTasks = [...currentTasks];
+      updatedTasks[taskIndex] = updatedTask;
+      return { tasks: updatedTasks, result: updatedTask };
+    });
+    if (!task) {
+      response.status(404).json({ error: 'Task not found.' });
+      return;
+    }
     response.json(task);
   } catch (error) {
     next(error);
@@ -112,15 +131,19 @@ app.delete('/api/tasks/:id', async (request, response, next) => {
     return;
   }
 
-  const taskIndex = tasks.findIndex(({ id }) => id === request.params.id);
-  if (taskIndex === -1) {
-    response.status(404).json({ error: 'Task not found.' });
-    return;
-  }
-
-  tasks.splice(taskIndex, 1);
   try {
-    await saveTasks();
+    const task = await mutateTasks((currentTasks) => {
+      const taskIndex = currentTasks.findIndex(({ id }) => id === request.params.id);
+      if (taskIndex === -1) return null;
+      return {
+        tasks: currentTasks.filter((_task, index) => index !== taskIndex),
+        result: currentTasks[taskIndex],
+      };
+    });
+    if (!task) {
+      response.status(404).json({ error: 'Task not found.' });
+      return;
+    }
     response.status(204).end();
   } catch (error) {
     next(error);

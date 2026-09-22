@@ -50,7 +50,8 @@ async function request(path, options) {
 
 async function loadTasks() {
   try {
-    tasks = await request('/api/tasks');
+    const loadedTasks = await request('/api/tasks');
+    tasks = Array.isArray(loadedTasks) ? loadedTasks : [];
     renderTasks();
   } catch {
     showMessage('Tasks are unavailable. Reload to try again.');
@@ -131,6 +132,7 @@ taskForm.addEventListener('submit', async (event) => {
 });
 
 startTimer.addEventListener('click', () => {
+  if (timerInterval || remainingSeconds === 0) return;
   timerEndTime = Date.now() + (remainingSeconds * 1000);
   timerInterval = setInterval(updateCountdown, 250);
   renderTimer();
