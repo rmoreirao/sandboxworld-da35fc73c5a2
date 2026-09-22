@@ -87,11 +87,12 @@ button {
   padding: 8px 12px;
 }
 
-button:hover:not(:disabled) {
+button:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--cp-accent-hover);
 }
 
-button:disabled {
+button:disabled,
+button[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.6;
 }

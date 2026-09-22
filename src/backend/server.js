@@ -24,7 +24,7 @@ async function loadTasks() {
     return savedTasks;
   } catch (error) {
     if (error.code === 'ENOENT') return [];
-    throw error;
+    throw new Error(`Unable to load task data from ${tasksFile}: ${error.message}`, { cause: error });
   }
 }
 
@@ -61,7 +61,7 @@ function validateTitle(title) {
 }
 
 function isTaskId(id) {
-  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  return typeof id === 'string' && id.length > 0 && id.length <= 64;
 }
 
 const app = express();
@@ -154,6 +154,9 @@ app.use('/api', (_request, response) => {
   response.status(404).json({ error: 'Not found.' });
 });
 app.use(express.static(publicRoot));
+app.use((_request, response) => {
+  response.status(404).type('text').send('Not found. Run npm run build before npm start.');
+});
 app.use((error, _request, response, _next) => {
   if (error instanceof SyntaxError && 'body' in error) {
     response.status(400).json({ error: 'Request body must be valid JSON.' });

@@ -7,8 +7,9 @@ const startTimer = document.querySelector('#start-timer');
 const pauseTimer = document.querySelector('#pause-timer');
 const resetTimer = document.querySelector('#reset-timer');
 
+const FOCUS_DURATION_SECONDS = 25 * 60;
 let tasks = [];
-let remainingSeconds = 25 * 60;
+let remainingSeconds = FOCUS_DURATION_SECONDS;
 let timerInterval;
 let timerEndTime;
 
@@ -97,8 +98,8 @@ function renderTimer() {
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
   countdown.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  startTimer.disabled = Boolean(timerInterval) || remainingSeconds === 0;
-  pauseTimer.disabled = !timerInterval;
+  startTimer.setAttribute('aria-disabled', String(Boolean(timerInterval) || remainingSeconds === 0));
+  pauseTimer.setAttribute('aria-disabled', String(!timerInterval));
 }
 
 function stopTimer() {
@@ -108,6 +109,7 @@ function stopTimer() {
 }
 
 function updateCountdown() {
+  if (!timerEndTime) return;
   remainingSeconds = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
   if (remainingSeconds === 0) stopTimer();
   renderTimer();
@@ -138,13 +140,14 @@ startTimer.addEventListener('click', () => {
   renderTimer();
 });
 pauseTimer.addEventListener('click', () => {
+  if (!timerInterval) return;
   updateCountdown();
   stopTimer();
   renderTimer();
 });
 resetTimer.addEventListener('click', () => {
   stopTimer();
-  remainingSeconds = 25 * 60;
+  remainingSeconds = FOCUS_DURATION_SECONDS;
   renderTimer();
 });
 
