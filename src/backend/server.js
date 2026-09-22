@@ -24,22 +24,21 @@ async function loadTasks() {
     return savedTasks;
   } catch (error) {
     if (error.code === 'ENOENT') return [];
-    throw new Error(`Unable to load task data from ${tasksFile}: ${error.message}`, { cause: error });
+    console.error(`Unable to load task data from ${tasksFile}: ${error.message}`);
+    return [];
   }
 }
 
 let tasks = await loadTasks();
-let writeQueue = Promise.resolve();
 let taskMutationQueue = Promise.resolve();
 function saveTasks(nextTasks) {
   const serializedTasks = JSON.stringify(nextTasks);
-  writeQueue = writeQueue.catch(() => {}).then(async () => {
+  return (async () => {
     await mkdir(dirname(tasksFile), { recursive: true });
     const temporaryFile = `${tasksFile}.${randomUUID()}.tmp`;
     await writeFile(temporaryFile, serializedTasks);
     await rename(temporaryFile, tasksFile);
-  });
-  return writeQueue;
+  })();
 }
 
 function mutateTasks(mutation) {
@@ -99,6 +98,9 @@ app.post('/api/tasks', async (request, response, next) => {
     next(error);
   }
 });
+app.all('/api/tasks', (_request, response) => {
+  response.set('Allow', 'GET, POST').status(405).json({ error: 'Method not allowed.' });
+});
 
 app.patch('/api/tasks/:id', async (request, response, next) => {
   if (!isTaskId(request.params.id) || typeof request.body?.completed !== 'boolean') {
@@ -148,6 +150,9 @@ app.delete('/api/tasks/:id', async (request, response, next) => {
   } catch (error) {
     next(error);
   }
+});
+app.all('/api/tasks/:id', (_request, response) => {
+  response.set('Allow', 'PATCH, DELETE').status(405).json({ error: 'Method not allowed.' });
 });
 
 app.use('/api', (_request, response) => {

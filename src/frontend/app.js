@@ -3,6 +3,7 @@ const taskTitle = document.querySelector('#task-title');
 const taskList = document.querySelector('#task-list');
 const taskMessage = document.querySelector('#task-message');
 const countdown = document.querySelector('#countdown');
+const timerMessage = document.querySelector('#timer-message');
 const startTimer = document.querySelector('#start-timer');
 const pauseTimer = document.querySelector('#pause-timer');
 const resetTimer = document.querySelector('#reset-timer');
@@ -15,6 +16,10 @@ let timerEndTime;
 
 function showMessage(message) {
   taskMessage.textContent = message;
+}
+
+function showTimerMessage(message) {
+  timerMessage.textContent = message;
 }
 
 function renderTasks() {
@@ -111,7 +116,10 @@ function stopTimer() {
 function updateCountdown() {
   if (!timerEndTime) return;
   remainingSeconds = Math.max(0, Math.ceil((timerEndTime - Date.now()) / 1000));
-  if (remainingSeconds === 0) stopTimer();
+  if (remainingSeconds === 0) {
+    stopTimer();
+    showTimerMessage('Timer complete.');
+  }
   renderTimer();
 }
 
@@ -137,17 +145,21 @@ startTimer.addEventListener('click', () => {
   if (timerInterval || remainingSeconds === 0) return;
   timerEndTime = Date.now() + (remainingSeconds * 1000);
   timerInterval = setInterval(updateCountdown, 250);
+  showTimerMessage('Timer started.');
   renderTimer();
 });
 pauseTimer.addEventListener('click', () => {
   if (!timerInterval) return;
   updateCountdown();
+  if (remainingSeconds === 0) return;
   stopTimer();
+  showTimerMessage('Timer paused.');
   renderTimer();
 });
 resetTimer.addEventListener('click', () => {
   stopTimer();
   remainingSeconds = FOCUS_DURATION_SECONDS;
+  showTimerMessage('Timer reset.');
   renderTimer();
 });
 
